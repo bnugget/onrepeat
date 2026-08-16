@@ -15,7 +15,7 @@ export function compareArtist(dataA, nameA, dataB, nameB, artistName, fromInt, t
     let totalPlays = 0;
     let artistPlays = 0;
     const artistCounts = new Map();
-    const songCounts = new Map();
+    const songCounts = new Map(); // track name -> count, FULL (not capped)
     for (let i = 0; i < data.eventDate.length; i++) {
       const d = data.eventDate[i];
       if (d < fromInt || d > toInt) continue;
@@ -24,13 +24,13 @@ export function compareArtist(dataA, nameA, dataB, nameB, artistName, fromInt, t
       artistCounts.set(name, (artistCounts.get(name) || 0) + 1);
       if (name !== artistName) continue;
       artistPlays++;
-      const si = data.eventSongIdx[i];
-      songCounts.set(si, (songCounts.get(si) || 0) + 1);
+      const track = data.songTrackName[data.eventSongIdx[i]];
+      songCounts.set(track, (songCounts.get(track) || 0) + 1);
     }
     const topTracks = [...songCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, topSongs)
-      .map(([si, count]) => ({ track: data.songTrackName[si], count }));
+      .map(([track, count]) => ({ track, count }));
 
     const rankedArtists = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]);
     const catalogSize = rankedArtists.length;
@@ -44,7 +44,8 @@ export function compareArtist(dataA, nameA, dataB, nameB, artistName, fromInt, t
       rank,
       catalogSize,
       percentile,
-      topTracks
+      topTracks,
+      songCounts // full map, used to merge track comparisons without misreporting "0" for tracks just outside someone's own top N
     };
   }
 
@@ -56,12 +57,26 @@ export function compareArtist(dataA, nameA, dataB, nameB, artistName, fromInt, t
     biggerFan = a.percentile === b.percentile ? "tie" : a.percentile < b.percentile ? "A" : "B";
   }
 
+  // Merge whichever tracks are "notable" for EITHER person (each
+  // person's own top N) into one union, using the FULL count maps so
+  // the other side's number is always their true count, not a false
+  // zero just because that track wasn't in their own personal top N.
+  const notableTracks = new Set([...a.topTracks.map((t) => t.track), ...b.topTracks.map((t) => t.track)]);
+  const trackComparison = [...notableTracks]
+    .map((track) => ({
+      track,
+      countA: a.songCounts.get(track) || 0,
+      countB: b.songCounts.get(track) || 0
+    }))
+    .sort((x, y) => y.countA + y.countB - (x.countA + x.countB));
+
   return {
     artistName,
     nameA,
     nameB,
     a,
     b,
-    biggerFan
+    biggerFan,
+    trackComparison
   };
 }

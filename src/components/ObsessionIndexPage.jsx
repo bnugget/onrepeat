@@ -44,11 +44,13 @@ export default function ObsessionIndexPage({ data, fromInt, toInt }) {
         <p className="eyebrow">Obsession Index</p>
         <h1>How <span>Obsessed</span> Are You?</h1>
         <p className="subhead">
-          For each {mode}, this blends how concentrated its plays were into your single most
-          intense {windowDays}-day stretch with how often you manually hit "play again" right
-          after (a stronger signal than proximity alone, where available). High score = a real
-          binge. Low score = steady, spread-out listening — a favorite, not an obsession. Only the
-          date range above applies; other filters don't touch this page.
+          Two different answers to "was I obsessed with this." <strong>Obsession Index</strong>{" "}
+          scores how concentrated plays were into one intense stretch relative to your whole
+          history with it — a decade-long favorite scores low even with a big week, since that
+          week is a small slice of everything you've ever played of it. <strong>On Repeat</strong>{" "}
+          is simpler: your literal highest repeat count in one window, no history required — a
+          new discovery you went hard on for a week shows up here even if you never touch it
+          again after. Only the date range above applies; other filters don't touch this page.
         </p>
       </header>
 
@@ -69,20 +71,25 @@ export default function ObsessionIndexPage({ data, fromInt, toInt }) {
             </div>
           </div>
         </div>
-        <div className="chart-head" style={{ marginTop: 4 }}>
-          <span className="chart-hint">
-            minimum plays — filters out low-sample noise (a {mode} with 5 plays crammed into one
-            week isn't really an "obsession," it's just your whole history with it)
-          </span>
-          <div className="chart-head-right">
-            <div className="tabs">
-              {MIN_PLAYS_OPTIONS.map((n) => (
-                <button key={n} className={minPlays === n ? "tab active" : "tab"} onClick={() => setMinPlays(n)}>
-                  {n}+
-                </button>
-              ))}
-            </div>
+        <p className="chart-hint" style={{ textTransform: "none", marginTop: 6 }}>
+          Peak window applies to both Obsession Index and On Repeat below — it's the length of the
+          "single most intense stretch" both are looking for.
+        </p>
+
+        <div className="field" style={{ marginTop: 16, marginBottom: 4 }}>
+          <label>Minimum plays</label>
+          <div className="tabs">
+            {MIN_PLAYS_OPTIONS.map((n) => (
+              <button key={n} className={minPlays === n ? "tab active" : "tab"} onClick={() => setMinPlays(n)}>
+                {n}+
+              </button>
+            ))}
           </div>
+          <p className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
+            Filters out low-sample noise — a {mode} with 5 plays crammed into one week isn't
+            really an "obsession," it's just your whole history with it. Only affects the ranked
+            list below, not On Repeat further down, which uses its own lower fixed threshold.
+          </p>
         </div>
 
         {items.length === 0 ? (
@@ -96,14 +103,21 @@ export default function ObsessionIndexPage({ data, fromInt, toInt }) {
 
       <section className="mini-chart-card" style={{ marginTop: 16 }}>
         <div className="mini-chart-head">
-          <span className="insight-label">◆ On repeat</span>
-          <span className="chart-hint">songs played 4+ times within the {windowDays}-day window above</span>
+          <span className="insight-label">◆ On Repeat</span>
         </div>
+        <p className="chart-hint" style={{ textTransform: "none", marginBottom: 10 }}>
+          Ranked purely by raw repeat count in your single busiest {windowDays}-day stretch — no
+          concentration math like Obsession Index above, just literally what you replayed the
+          most. Uses the same {windowDays}-day window set above, but its own fixed 4+ plays
+          threshold — deliberately lower than the minimum-plays selector above, so this catches
+          smaller bursts too, not just the ones big enough to clear whatever bar you've set for
+          the ranked list.
+        </p>
 
         {onRepeat.length === 0 ? (
           <p className="mood-empty">
-            No obsession-level bursts in this range at a {windowDays}-day window — try widening the
-            date range or the window size above.
+            No bursts of 4+ plays in a single {windowDays}-day window in this range — try widening
+            the date range or the window size above.
           </p>
         ) : (
           <div className="obsession-list">

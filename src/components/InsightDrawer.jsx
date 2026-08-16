@@ -14,7 +14,7 @@ export default function InsightDrawer({ data, fromInt, toInt, moodTags, genreTag
   const [dynamicText, setDynamicText] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [showKeyField, setShowKeyField] = useState(!getAnthropicKey());
+  const [showKeyField, setShowKeyField] = useState(false);
 
   const rangeIsFull = useMemo(() => {
     const { min, max } = dateBounds(data);
@@ -33,20 +33,17 @@ export default function InsightDrawer({ data, fromInt, toInt, moodTags, genreTag
 
   async function regenerate() {
     const key = anthropicKeyInput.trim();
-    if (!key) {
-      setShowKeyField(true);
-      return;
-    }
-    setAnthropicKey(key);
+    if (key) setAnthropicKey(key);
     setCustomInstructions(instructions);
     setLoading(true);
     setError(null);
     try {
       const context = buildInsightContext(data, fromInt, toInt, { moodTags, genreTags, eras, excludedArtists });
-      const text = await generateInsight(context, key, instructions);
+      const text = await generateInsight(context, key || undefined, instructions);
       setDynamicText(text);
     } catch (err) {
       setError(err.message || "Something went wrong generating the insight.");
+      if (!key) setShowKeyField(true); // offer BYOK as a fallback if the shared path failed
     } finally {
       setLoading(false);
     }
@@ -110,7 +107,7 @@ export default function InsightDrawer({ data, fromInt, toInt, moodTags, genreTag
           </div>
 
           <div className="insight-regen">
-            {showKeyField && (
+            {showKeyField ? (
               <input
                 type="password"
                 className="insight-key-input"
@@ -118,6 +115,10 @@ export default function InsightDrawer({ data, fromInt, toInt, moodTags, genreTag
                 value={anthropicKeyInput}
                 onChange={(e) => setAnthropicKeyInput(e.target.value)}
               />
+            ) : (
+              <button className="insight-instructions-label" style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }} onClick={() => setShowKeyField(true)}>
+                Use your own Anthropic API key instead →
+              </button>
             )}
             <label className="insight-instructions-label" htmlFor="customInstructions">
               Custom instructions (optional)

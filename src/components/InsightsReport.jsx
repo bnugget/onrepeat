@@ -9,15 +9,11 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
   const [error, setError] = useState(null);
   const [instructions, setInstructions] = useState("");
   const [apiKeyInput, setApiKeyInput] = useState(() => getAnthropicKey());
-  const [showKeyField, setShowKeyField] = useState(!getAnthropicKey());
+  const [showKeyField, setShowKeyField] = useState(false);
 
   async function handleGenerate() {
     const key = apiKeyInput.trim();
-    if (!key) {
-      setShowKeyField(true);
-      return;
-    }
-    setAnthropicKey(key);
+    if (key) setAnthropicKey(key);
     setLoading(true);
     setError(null);
     try {
@@ -40,10 +36,11 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
         genresA: genreCmp.pieA.slices.map((s) => ({ name: s.name, pct: genreCmp.pieA.total > 0 ? +((s.value / genreCmp.pieA.total) * 100).toFixed(1) : 0 })),
         genresB: genreCmp.pieB.slices.map((s) => ({ name: s.name, pct: genreCmp.pieB.total > 0 ? +((s.value / genreCmp.pieB.total) * 100).toFixed(1) : 0 }))
       };
-      const text = await generateComparisonReport(context, key, instructions);
+      const text = await generateComparisonReport(context, key || undefined, instructions);
       setSections(parseReportSections(text));
     } catch (err) {
       setError(err.message || "Couldn't generate the report.");
+      if (!key) setShowKeyField(true);
     } finally {
       setLoading(false);
     }
@@ -57,7 +54,7 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
           overlap, and a fun compatibility verdict — all grounded in the actual numbers above, not
           generic filler.
         </p>
-        {showKeyField && (
+        {showKeyField ? (
           <input
             type="password"
             className="insight-key-input"
@@ -66,6 +63,10 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
             onChange={(e) => setApiKeyInput(e.target.value)}
             style={{ marginBottom: 10 }}
           />
+        ) : (
+          <button className="insight-instructions-label" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, marginBottom: 10 }} onClick={() => setShowKeyField(true)}>
+            Use your own Anthropic API key instead →
+          </button>
         )}
         <label className="insight-instructions-label" htmlFor="reportInstructions">
           Custom instructions (optional)

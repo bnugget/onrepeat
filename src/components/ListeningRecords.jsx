@@ -126,6 +126,24 @@ export default function ListeningRecords({ recordsA, recordsB, nameA, nameB }) {
         winner={higherWins(recordsA.bestSongWindowCount, recordsB.bestSongWindowCount)}
       />
 
+      <RecordRow
+        label="Most plays of one song in a month"
+        valueA={`${recordsA.bestMonthSongCount}×`}
+        subA={`"${recordsA.bestMonthSongTrack}" — ${recordsA.bestMonthSongArtist} (${recordsA.bestMonthSongLabel})`}
+        valueB={`${recordsB.bestMonthSongCount}×`}
+        subB={`"${recordsB.bestMonthSongTrack}" — ${recordsB.bestMonthSongArtist} (${recordsB.bestMonthSongLabel})`}
+        winner={higherWins(recordsA.bestMonthSongCount, recordsB.bestMonthSongCount)}
+      />
+
+      <RecordRow
+        label="Most plays of one song in a year"
+        valueA={`${recordsA.bestYearSongCount}×`}
+        subA={`"${recordsA.bestYearSongTrack}" — ${recordsA.bestYearSongArtist} (${recordsA.bestYearSongYearLabel})`}
+        valueB={`${recordsB.bestYearSongCount}×`}
+        subB={`"${recordsB.bestYearSongTrack}" — ${recordsB.bestYearSongArtist} (${recordsB.bestYearSongYearLabel})`}
+        winner={higherWins(recordsA.bestYearSongCount, recordsB.bestYearSongCount)}
+      />
+
       {recordsA.bestDayMinutes !== null && recordsB.bestDayMinutes !== null && (
         <RecordRow
           label="Most minutes listened in a day"

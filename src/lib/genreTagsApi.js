@@ -1,10 +1,23 @@
 import { supabase } from "./supabaseClient.js";
 
+/** Supabase caps any single .select() at 1000 rows by default (a
+ *  PostgREST setting) — silently, no error, just a truncated result.
+ *  Paginates through the full table in batches instead, so this
+ *  keeps working correctly no matter how large genre_tags grows. */
 export async function fetchAllGenreTags() {
-  const { data, error } = await supabase.from("genre_tags").select("artist_name, genre");
-  if (error) throw error;
+  const pageSize = 1000;
   const obj = {};
-  for (const row of data) obj[row.artist_name] = row.genre;
+  let from = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("genre_tags")
+      .select("artist_name, genre")
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    for (const row of data) obj[row.artist_name] = row.genre;
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
   return obj;
 }
 

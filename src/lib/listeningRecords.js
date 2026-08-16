@@ -54,6 +54,8 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
   const yearCounts = new Map();
   const monthCounts = new Map(); // key: year*100+month
   const daySongCounts = new Map(); // key: dayInt -> Map(songIdx -> count)
+  const monthSongCounts = new Map(); // key: ymKey -> Map(songIdx -> count)
+  const yearSongCounts = new Map(); // key: year -> Map(songIdx -> count)
   const dayMsPlayed = new Map(); // key: dayInt -> total ms
   const activeDays = new Set();
   const songDayLists = new Map(); // songIdx -> [ordinal,...]
@@ -80,6 +82,14 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
     if (!daySongCounts.has(d)) daySongCounts.set(d, new Map());
     const sm = daySongCounts.get(d);
     sm.set(si, (sm.get(si) || 0) + 1);
+
+    if (!monthSongCounts.has(ymKey)) monthSongCounts.set(ymKey, new Map());
+    const msm = monthSongCounts.get(ymKey);
+    msm.set(si, (msm.get(si) || 0) + 1);
+
+    if (!yearSongCounts.has(y)) yearSongCounts.set(y, new Map());
+    const ysm = yearSongCounts.get(y);
+    ysm.set(si, (ysm.get(si) || 0) + 1);
 
     if (hasMs) {
       const ms = data.eventMsPlayed[i];
@@ -114,6 +124,20 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
   for (const [day, sm] of daySongCounts) {
     for (const [si, c] of sm) {
       if (c > bestDaySongCount) { bestDaySongCount = c; bestDaySong = si; bestDaySongDay = day; }
+    }
+  }
+
+  let bestMonthSong = null, bestMonthSongCount = 0, bestMonthSongYM = null;
+  for (const [ym, sm] of monthSongCounts) {
+    for (const [si, c] of sm) {
+      if (c > bestMonthSongCount) { bestMonthSongCount = c; bestMonthSong = si; bestMonthSongYM = ym; }
+    }
+  }
+
+  let bestYearSong = null, bestYearSongCount = 0, bestYearSongYear = null;
+  for (const [y, sm] of yearSongCounts) {
+    for (const [si, c] of sm) {
+      if (c > bestYearSongCount) { bestYearSongCount = c; bestYearSong = si; bestYearSongYear = y; }
     }
   }
 
@@ -192,6 +216,16 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
     bestDaySongArtist: bestDaySong !== null ? data.artistNames[data.songArtistIdx[bestDaySong]] : null,
     bestDaySongCount,
     bestDaySongDayLabel: bestDaySongDay !== null ? formatDayInt(bestDaySongDay) : null,
+
+    bestMonthSongTrack: bestMonthSong !== null ? data.songTrackName[bestMonthSong] : null,
+    bestMonthSongArtist: bestMonthSong !== null ? data.artistNames[data.songArtistIdx[bestMonthSong]] : null,
+    bestMonthSongCount,
+    bestMonthSongLabel: bestMonthSongYM !== null ? formatYearMonth(bestMonthSongYM) : null,
+
+    bestYearSongTrack: bestYearSong !== null ? data.songTrackName[bestYearSong] : null,
+    bestYearSongArtist: bestYearSong !== null ? data.artistNames[data.songArtistIdx[bestYearSong]] : null,
+    bestYearSongCount,
+    bestYearSongYearLabel: bestYearSongYear !== null ? String(bestYearSongYear) : null,
 
     bestDayMinutes: hasMs && bestMsDay !== null ? Math.round(bestMsDayValue / 60000) : null,
     bestDayMinutesDayLabel: bestMsDay !== null ? formatDayInt(bestMsDay) : null,

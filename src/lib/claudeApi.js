@@ -1,37 +1,64 @@
-// Anthropic added a direct-browser-access header specifically for
-// this "bring your own key" pattern, so this runs client-side with no
-// backend proxy. https://docs.claude.com/en/api/overview
+// Two paths to Claude:
+// 1. BYOK — if the person has set their own key (rare now, kept as a
+//    fallback for local dev and anyone who prefers it), call
+//    Anthropic directly from the browser using the direct-browser-
+//    access header. https://docs.claude.com/en/api/overview
+// 2. Shared proxy (default) — no personal key needed. Calls our own
+//    /api/claude-insight serverless function, which holds the real
+//    key server-side and forwards the request. This only works once
+//    deployed to Vercel (or run via `vercel dev` locally) — plain
+//    `npm run dev` doesn't serve /api routes.
+import { supabase } from "./supabaseClient.js";
 
 const MODEL = "claude-haiku-4-5-20251001"; // fast + cheap, plenty for a short summary
 
-async function callClaude(prompt, apiKey) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1500,
-      messages: [{ role: "user", content: prompt }]
-    })
-  });
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}));
-    throw new Error(errBody?.error?.message || `Claude API error (${res.status})`);
-  }
-
-  const data = await res.json();
+function extractText(data) {
   const textBlock = data.content?.find((b) => b.type === "text");
   const text = textBlock?.text?.trim() || "";
   if (data.stop_reason === "max_tokens") {
     return text + "\n\n(Response cut off — this ran long. Try narrowing the date range or asking for fewer eras at once.)";
   }
   return text;
+}
+
+async function callClaude(prompt, apiKey) {
+  if (apiKey) {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1500,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `Claude API error (${res.status})`);
+    }
+    return extractText(await res.json());
+  }
+
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) {
+    throw new Error("You need to be signed in to generate an insight.");
+  }
+  const res = await fetch("/api/claude-insight", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ prompt })
+  });
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw new Error(errBody?.error || `Insight request failed (${res.status})`);
+  }
+  return extractText(await res.json());
 }
 
 export async function generateInsight(context, apiKey, customInstructions) {

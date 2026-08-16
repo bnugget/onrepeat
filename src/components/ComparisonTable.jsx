@@ -43,11 +43,13 @@ export default function ComparisonTable({ items, nameA, nameB, onItemClick, hide
             <div className={`compare-table-cell${winner === "A" ? " winner" : ""}`} style={winner === "A" ? { borderColor: PERSON_A_COLOR, background: "rgba(232,99,159,0.08)" } : undefined}>
               {winner === "A" && <span className="compare-table-trophy">🏆</span>}
               <span className="compare-table-value">{item.cellA.value}</span>
+              {item.cellA.badge && <span className="compare-table-badge" style={{ color: PERSON_A_COLOR, borderColor: PERSON_A_COLOR }}>{item.cellA.badge}</span>}
               {item.cellA.sub && <span className="compare-table-sub">{item.cellA.sub}</span>}
             </div>
             <div className={`compare-table-cell${winner === "B" ? " winner" : ""}`} style={winner === "B" ? { borderColor: PERSON_B_COLOR, background: "rgba(127,195,232,0.1)" } : undefined}>
               {winner === "B" && <span className="compare-table-trophy">🏆</span>}
               <span className="compare-table-value">{item.cellB.value}</span>
+              {item.cellB.badge && <span className="compare-table-badge" style={{ color: PERSON_B_COLOR, borderColor: PERSON_B_COLOR }}>{item.cellB.badge}</span>}
               {item.cellB.sub && <span className="compare-table-sub">{item.cellB.sub}</span>}
             </div>
           </div>

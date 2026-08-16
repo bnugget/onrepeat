@@ -154,9 +154,9 @@ export default function Dashboard({ rawData }) {
   const [minPlaysFilter, setMinPlaysFilter] = useState(() => {
     try {
       const raw = localStorage.getItem("scrobble-min-plays-v1");
-      return raw ? Number(raw) || 0 : 0;
+      return raw !== null ? Number(raw) || 0 : 100;
     } catch {
-      return 0;
+      return 100;
     }
   });
   const [eras, setEras] = useState(() => loadEras());

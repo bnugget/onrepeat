@@ -99,4 +99,3 @@ reads through it:
 - Large uploads block the main thread during processing (a progress
   message shows, but the UI isn't interactive) — fine at current
   scale, would want a Web Worker if datasets get much bigger
-# onrepeat

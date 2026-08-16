@@ -24,7 +24,7 @@ export default function GenreTagger({
   const [rate, setRate] = useState(15);
   const fileRef = useRef(null);
 
-  const remaining = data.artistNames.length - Object.keys(genreTags).length;
+  const remaining = data.artistNames.filter((n) => !genreTags[n]).length;
   const etaMin = Math.ceil(remaining / rate / 60);
 
   function saveKeyAndStart() {
