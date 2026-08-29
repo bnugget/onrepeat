@@ -1,8 +1,6 @@
 import React from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-
-const PERSON_A_COLOR = "#E8639F";
-const PERSON_B_COLOR = "#7FC3E8";
+import { PERSON_A_COLOR, PERSON_B_COLOR } from "../lib/constants.js";
 
 function CompareTooltip({ active, payload, label, nameA, nameB }) {
   if (!active || !payload || !payload.length) return null;

@@ -1,7 +1,5 @@
 import React from "react";
-
-const PERSON_A_COLOR = "#E8639F";
-const PERSON_B_COLOR = "#7FC3E8";
+import { PERSON_A_COLOR, PERSON_B_COLOR } from "../lib/constants.js";
 
 /**
  * items: [{

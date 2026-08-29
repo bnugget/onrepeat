@@ -48,13 +48,21 @@ export function compareGenreDistribution(dataA, dataB, genreTags, fromInt, toInt
 
   function pieData(counts) {
     const total = [...counts.values()].reduce((a, b) => a + b, 0);
-    const slices = genreOrder.map((g) => ({ name: g, value: counts.get(g) || 0 }));
-    const namedSum = slices.reduce((a, s) => a + s.value, 0);
+    // Each pie sorts by ITS OWN values (largest slice first) — using
+    // the shared combined order here instead would make an
+    // individual pie look randomly ordered whenever this person's
+    // own ranking doesn't match the combined one.
+    const namedSlices = genreOrder
+      .map((g) => ({ name: g, value: counts.get(g) || 0 }))
+      .filter((s) => s.value > 0)
+      .sort((a, b) => b.value - a.value);
+    const namedSum = namedSlices.reduce((a, s) => a + s.value, 0);
     const untagged = counts.get("Untagged") || 0;
     const otherSum = total - namedSum - untagged;
+    const slices = [...namedSlices];
     if (otherSum > 0) slices.push({ name: "Other", value: otherSum });
     if (untagged > 0) slices.push({ name: "Untagged", value: untagged });
-    return { slices: slices.filter((s) => s.value > 0), total };
+    return { slices, total };
   }
 
   const pieA = pieData(countsA);

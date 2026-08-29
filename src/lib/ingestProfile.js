@@ -32,7 +32,12 @@ function parseLastfmCsv(fileText) {
   const parsed = Papa.parse(fileText, { header: true, skipEmptyLines: true });
   const rows = [];
   for (const row of parsed.data) {
-    const dateStr = row.date;
+    // Supports two export formats: the original ("date" column) and
+    // a newer scraper tool's format ("utc_time" column, plus extra
+    // MusicBrainz ID columns we don't use). Both use the identical
+    // "16 Dec 2013, 03:56" pattern, just under a different header
+    // name — utc_time checked first since it's the current format.
+    const dateStr = row.utc_time || row.date;
     if (!dateStr) continue;
     const year = dateStr.split(",")[0]?.trim().split(" ").pop();
     if (year === "1970") continue;
@@ -88,7 +93,27 @@ function parseSpotifyJson(fileTexts) {
       country: r.conn_country || "ZZ"
     });
   }
-  return rows;
+
+  // Spotify's own ms_played field is occasionally wrong — confirmed
+  // against a real export where rapid-skip events ("clickrow" ->
+  // "fwdbtn", i.e. click a track then immediately hit next) on
+  // platform "unknown" reported multi-minute ms_played values even
+  // though the NEXT logged event started just seconds later. A play
+  // can never legitimately outlast the real time until the next
+  // event starts — that's a hard physical ceiling, not a guess — so
+  // cap rather than trust the raw value blindly. Sorting first is
+  // required: this only works correctly in true chronological order.
+  rows.sort((a, b) => a.date - b.date);
+  let correctedCount = 0;
+  for (let i = 0; i < rows.length - 1; i++) {
+    const gapMs = rows[i + 1].date.getTime() - rows[i].date.getTime();
+    if (gapMs > 0 && rows[i].ms > gapMs) {
+      rows[i].ms = gapMs;
+      correctedCount++;
+    }
+  }
+
+  return { rows, correctedCount };
 }
 
 /** Auto-detect where Spotify's export becomes reliably dense, so
@@ -120,7 +145,21 @@ function detectSpliceDayInt(spotifyRows) {
       return y * 10000 + m * 100 + 1;
     }
   }
-  const [y, m] = months[0].split("-").map(Number);
+
+  // No month ever hit the "sustained heavy usage" bar above — happens
+  // for genuinely modest listeners who never average 50+/month. The
+  // old fallback here was `months[0]`, the literal first month
+  // Spotify has ANY data for — which is dangerous, because a single
+  // stray early timestamp (a real, known quirk in some Spotify
+  // exports, e.g. a liked-song backfill date) would hijack the whole
+  // splice point and silently discard years of real Last.fm history
+  // before it. Instead, require the fallback month to clear a much
+  // lower but still real bar (10+ plays) before it can anchor the
+  // splice; a single anomalous month with a handful of stray plays
+  // no longer counts.
+  const reasonable = months.find((key) => countAt(key) >= 10);
+  const fallbackKey = reasonable || months[0];
+  const [y, m] = fallbackKey.split("-").map(Number);
   return y * 10000 + m * 100 + 1;
 }
 
@@ -284,7 +323,12 @@ function buildFromRows(lastfmRows, spotifyRows, onProgress) {
 export function buildProfileData(lastfmCsvText, spotifyJsonTexts, onProgress) {
   onProgress?.("Parsing files…");
   const lastfmRows = lastfmCsvText ? parseLastfmCsv(lastfmCsvText) : [];
-  const spotifyRows = spotifyJsonTexts && spotifyJsonTexts.length ? parseSpotifyJson(spotifyJsonTexts) : [];
+  const { rows: spotifyRows, correctedCount } = spotifyJsonTexts && spotifyJsonTexts.length
+    ? parseSpotifyJson(spotifyJsonTexts)
+    : { rows: [], correctedCount: 0 };
+  if (correctedCount > 0) {
+    onProgress?.(`Corrected ${correctedCount.toLocaleString()} implausible play durations (Spotify's own export occasionally overstates how long a rapidly-skipped track played)…`);
+  }
   return buildFromRows(lastfmRows, spotifyRows, onProgress);
 }
 
@@ -364,7 +408,12 @@ export function mergeProfileData(existingProfileData, lastfmCsvText, spotifyJson
 
   onProgress?.("Parsing new files…");
   const newLastfmRows = lastfmCsvText ? parseLastfmCsv(lastfmCsvText) : [];
-  const newSpotifyRows = spotifyJsonTexts && spotifyJsonTexts.length ? parseSpotifyJson(spotifyJsonTexts) : [];
+  const { rows: newSpotifyRows, correctedCount } = spotifyJsonTexts && spotifyJsonTexts.length
+    ? parseSpotifyJson(spotifyJsonTexts)
+    : { rows: [], correctedCount: 0 };
+  if (correctedCount > 0) {
+    onProgress?.(`Corrected ${correctedCount.toLocaleString()} implausible play durations in the new file(s)…`);
+  }
 
   const mergedLastfm = dedupeRows([...existingLastfm, ...newLastfmRows]);
   const mergedSpotify = dedupeRows([...existingSpotify, ...newSpotifyRows]);

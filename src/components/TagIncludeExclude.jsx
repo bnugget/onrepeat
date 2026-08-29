@@ -66,7 +66,7 @@ export default function TagIncludeExclude({ label, items, includedList, excluded
                     <span className="tagged-chip" key={key} style={{ borderColor: "#7FC3E8" }}>
                       <span className="sw" style={{ background: "#7FC3E8" }} />
                       {it ? it.label : key}
-                      <button className="mood-x" onClick={() => onRemoveIncluded(key)}>×</button>
+                      <button className="mood-x" aria-label={`Remove ${it ? it.label : key} from included`} onClick={() => onRemoveIncluded(key)}>×</button>
                     </span>
                   );
                 })}
@@ -83,7 +83,7 @@ export default function TagIncludeExclude({ label, items, includedList, excluded
                     <span className="tagged-chip" key={key} style={{ borderColor: "#D6486E" }}>
                       <span className="sw" style={{ background: "#D6486E" }} />
                       {it ? it.label : key}
-                      <button className="mood-x" onClick={() => onRemoveExcluded(key)}>×</button>
+                      <button className="mood-x" aria-label={`Remove ${it ? it.label : key} from excluded`} onClick={() => onRemoveExcluded(key)}>×</button>
                     </span>
                   );
                 })}

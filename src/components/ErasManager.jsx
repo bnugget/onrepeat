@@ -79,7 +79,7 @@ export default function ErasManager({ eras, onAdd, onRemove, onZoom, bounds }) {
                 <span className="sw" style={{ background: e.color }} />
                 {e.label} — {e.startISO} to {e.endISO}
                 <button className="era-zoom" onClick={() => onZoom(e)} title="Zoom the timeline to this era">⤢</button>
-                <button className="mood-x" onClick={() => onRemove(e.id)}>×</button>
+                <button className="mood-x" aria-label={`Remove era ${e.label}`} onClick={() => onRemove(e.id)}>×</button>
               </span>
             ))}
           </div>

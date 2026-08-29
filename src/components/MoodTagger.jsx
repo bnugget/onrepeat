@@ -66,7 +66,7 @@ export default function MoodTagger({ data, moodTags, fromInt, toInt, onSetTag, o
                 <span className="mood-current" style={{ borderColor: colorForMood(current) }}>
                   <span className="sw" style={{ background: colorForMood(current) }} />
                   {current}
-                  <button className="mood-x" onClick={() => onRemoveTag(m.name)}>×</button>
+                  <button className="mood-x" aria-label={`Remove mood tag for ${m.name}`} onClick={() => onRemoveTag(m.name)}>×</button>
                 </span>
               )}
             </div>

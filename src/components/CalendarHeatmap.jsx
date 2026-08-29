@@ -73,9 +73,9 @@ export default function CalendarHeatmap({ data, minYear, maxYear, initialYear })
       <div className="mini-chart-head">
         <span className="insight-label">◆ Calendar</span>
         <div className="cal-nav">
-          <button className="btn" disabled={year <= minYear} onClick={() => setYear((y) => y - 1)}>‹</button>
+          <button className="btn" disabled={year <= minYear} aria-label="Previous year" onClick={() => setYear((y) => y - 1)}>‹</button>
           <span className="cal-year">{year}</span>
-          <button className="btn" disabled={year >= maxYear} onClick={() => setYear((y) => y + 1)}>›</button>
+          <button className="btn" disabled={year >= maxYear} aria-label="Next year" onClick={() => setYear((y) => y + 1)}>›</button>
         </div>
       </div>
       <p className="chart-hint" style={{ marginBottom: 10 }}>

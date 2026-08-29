@@ -86,9 +86,9 @@ export default function ObsessionIndexPage({ data, fromInt, toInt }) {
             ))}
           </div>
           <p className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
-            Filters out low-sample noise — a {mode} with 5 plays crammed into one week isn't
-            really an "obsession," it's just your whole history with it. Only affects the ranked
-            list below, not On Repeat further down, which uses its own lower fixed threshold.
+            Filters low-sample noise — a {mode} with 5 plays crammed into one week isn't really an
+            "obsession." Doesn't affect On Repeat below (its own fixed threshold), and uses a
+            smaller scale than Minimum Plays elsewhere since this gates a ranking, not a comparison.
           </p>
         </div>
 

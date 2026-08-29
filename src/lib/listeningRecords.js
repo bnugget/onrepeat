@@ -1,7 +1,5 @@
 import { dayIntToOrdinal, ordinalToDate } from "./dateUtils.js";
-
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+import { MONTH_NAMES, MONTH_SHORT } from "./constants.js";
 
 function formatDayInt(d) {
   const y = Math.floor(d / 10000);
@@ -146,6 +144,16 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
     for (const [day, ms] of dayMsPlayed) if (ms > bestMsDayValue) { bestMsDayValue = ms; bestMsDay = day; }
   }
 
+  // 86,400,000ms = 24 hours. A single calendar day physically cannot
+  // contain more listening time than that — if the total exceeds it,
+  // that's not a real record, it's proof of duplicate or overlapping
+  // events in the underlying data (most likely: the same export
+  // re-uploaded, or two overlapping exports merged without catching
+  // near-duplicate rows). Flag it rather than silently reporting an
+  // impossible number as if it were a legitimate stat.
+  const DAY_MS_MAX = 86400000;
+  const bestDayMinutesImpossible = hasMs && bestMsDayValue > DAY_MS_MAX;
+
   let bestSongWindow = null, bestSongWindowCount = 0, bestSongWindowStart = null, bestSongWindowEnd = null;
   for (const [si, ordsRaw] of songDayLists) {
     const ords = [...ordsRaw].sort((a, b) => a - b);
@@ -229,6 +237,8 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
 
     bestDayMinutes: hasMs && bestMsDay !== null ? Math.round(bestMsDayValue / 60000) : null,
     bestDayMinutesDayLabel: bestMsDay !== null ? formatDayInt(bestMsDay) : null,
+    bestDayMinutesImpossible,
+    bestDayMinutesDayInt: bestMsDay,
 
     bestSongWindowTrack: bestSongWindow !== null ? data.songTrackName[bestSongWindow] : null,
     bestSongWindowArtist: bestSongWindow !== null ? data.artistNames[data.songArtistIdx[bestSongWindow]] : null,
@@ -246,4 +256,47 @@ export function computeListeningRecords(data, fromInt, toInt, genreTags = {}) {
     effectiveGenres,
     distinctGenresTagged: genreCounts.size
   };
+}
+
+/**
+ * Diagnostic: lists every event on a specific day, in play order,
+ * with a running total — so a flagged "impossible day" (more
+ * listened minutes than a day physically contains) can actually be
+ * inspected rather than just distrusted. Exact-duplicate rows
+ * (same artist, track, and ms_played appearing more than once) are
+ * marked, since that's the most common real cause — the same
+ * underlying play counted twice after an overlapping data merge.
+ */
+export function getDayEventBreakdown(data, dayInt) {
+  const hasMs = !!data.eventMsPlayed;
+  const rows = [];
+  for (let i = 0; i < data.eventDate.length; i++) {
+    if (data.eventDate[i] !== dayInt) continue;
+    const ai = data.eventArtistIdx[i];
+    const si = data.eventSongIdx[i];
+    rows.push({
+      artist: data.artistNames[ai],
+      track: data.songTrackName[si],
+      ms: hasMs ? data.eventMsPlayed[i] : null,
+      platform: data.eventPlatformIdx ? data.platformNames[data.eventPlatformIdx[i]] : null
+    });
+  }
+
+  const seen = new Map(); // "artist|track|ms" -> count
+  for (const r of rows) {
+    const key = `${r.artist}|${r.track}|${r.ms}`;
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+
+  let running = 0;
+  const withRunning = rows.map((r) => {
+    running += r.ms || 0;
+    const key = `${r.artist}|${r.track}|${r.ms}`;
+    return { ...r, runningMs: running, exactDuplicateCount: seen.get(key) };
+  });
+
+  const totalMs = running;
+  const duplicateGroups = [...seen.entries()].filter(([, count]) => count > 1).length;
+
+  return { events: withRunning, totalMs, totalCount: rows.length, duplicateGroups };
 }

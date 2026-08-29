@@ -71,7 +71,7 @@ export default function GroupedTagList({ tags, colorFn, onRemove, itemLabel = "a
                   {filtered.slice(0, 500).map((name) => (
                     <div className="tag-group-item" key={name}>
                       <span>{name}</span>
-                      <button className="mood-x" onClick={() => onRemove(name)}>×</button>
+                      <button className="mood-x" aria-label={`Remove ${name}`} onClick={() => onRemove(name)}>×</button>
                     </div>
                   ))}
                   {filtered.length > 500 && (

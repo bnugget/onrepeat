@@ -1,3 +1,5 @@
+import { MONTH_SHORT } from "./constants.js";
+
 /** Log-weighted cosine similarity between two artist play-count
  *  maps. Log weighting keeps one person's single mega-favorite from
  *  dominating the score the way raw counts would, without needing an
@@ -26,7 +28,6 @@ export function similarityLabel(pct) {
   return "Basically the same person";
 }
 
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function formatDayInt(dayInt) {
   const y = Math.floor(dayInt / 10000);
   const m = Math.floor((dayInt % 10000) / 100);

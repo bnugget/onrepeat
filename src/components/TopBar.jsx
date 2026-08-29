@@ -62,8 +62,8 @@ export default function TopBar({
                   </button>
                   {p.owner_id === currentUserId && (
                     <>
-                      <button className="era-zoom" title="Upload fresher data" onClick={() => { onRefresh(p); setOpen(false); }}>↻</button>
-                      <button className="mood-x" title="Delete" onClick={() => onDelete(p)}>×</button>
+                      <button className="era-zoom" title="Upload fresher data" aria-label={`Upload fresher data for ${p.name}`} onClick={() => { onRefresh(p); setOpen(false); }}>↻</button>
+                      <button className="mood-x" title="Delete" aria-label={`Delete profile ${p.name}`} onClick={() => onDelete(p)}>×</button>
                     </>
                   )}
                 </div>

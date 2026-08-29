@@ -89,7 +89,7 @@ export default function EntityIncludeExclude({
               <span className="tagged-chip" key={key} style={{ borderColor: "#7FC3E8" }}>
                 <span className="sw" style={{ background: "#7FC3E8" }} />
                 {key}
-                <button className="mood-x" onClick={() => onRemoveIncluded(key)}>×</button>
+                <button className="mood-x" aria-label={`Remove ${key} from included`} onClick={() => onRemoveIncluded(key)}>×</button>
               </span>
             ))}
           </div>
@@ -104,7 +104,7 @@ export default function EntityIncludeExclude({
               <span className="tagged-chip" key={key} style={{ borderColor: "#D6486E" }}>
                 <span className="sw" style={{ background: "#D6486E" }} />
                 {key}
-                <button className="mood-x" onClick={() => onRemoveExcluded(key)}>×</button>
+                <button className="mood-x" aria-label={`Remove ${key} from excluded`} onClick={() => onRemoveExcluded(key)}>×</button>
               </span>
             ))}
           </div>

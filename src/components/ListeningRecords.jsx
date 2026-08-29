@@ -1,9 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
+import { PERSON_A_COLOR, PERSON_B_COLOR } from "../lib/constants.js";
+import { getDayEventBreakdown } from "../lib/listeningRecords.js";
 
-const PERSON_A_COLOR = "#E8639F";
-const PERSON_B_COLOR = "#7FC3E8";
-
-function RecordRow({ label, sublabel, valueA, subA, valueB, subB, winner, unavailable }) {
+function RecordRow({ label, sublabel, valueA, subA, valueB, subB, winner, unavailable, warningA, warningB }) {
   if (unavailable) return null;
   return (
     <div className="record-row">
@@ -11,6 +10,7 @@ function RecordRow({ label, sublabel, valueA, subA, valueB, subB, winner, unavai
         {winner === "A" && <span className="record-trophy">🏆</span>}
         <span className="record-value" style={winner === "A" ? { color: PERSON_A_COLOR } : undefined}>{valueA}</span>
         {subA && <span className="record-sub">{subA}</span>}
+        {warningA}
       </div>
       <div className="record-label">
         <span>{label}</span>
@@ -20,6 +20,54 @@ function RecordRow({ label, sublabel, valueA, subA, valueB, subB, winner, unavai
         {winner === "B" && <span className="record-trophy">🏆</span>}
         <span className="record-value" style={winner === "B" ? { color: PERSON_B_COLOR } : undefined}>{valueB}</span>
         {subB && <span className="record-sub">{subB}</span>}
+        {warningB}
+      </div>
+    </div>
+  );
+}
+
+/** Shown next to an "impossible" day-minutes record — explains why
+ *  it can't be right and lets the person actually see the underlying
+ *  events, rather than just being told to distrust a number. */
+function ImpossibleDayWarning({ data, dayInt, dayLabel }) {
+  const [open, setOpen] = useState(false);
+  if (!data || dayInt === null || dayInt === undefined) return null;
+
+  return (
+    <div style={{ marginTop: 4 }}>
+      <button
+        className="record-warning-btn"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        ⚠ Exceeds 24 hours — likely duplicate data. {open ? "Hide" : "Show"} events
+      </button>
+      {open && <DayEventBreakdown data={data} dayInt={dayInt} dayLabel={dayLabel} />}
+    </div>
+  );
+}
+
+function DayEventBreakdown({ data, dayInt, dayLabel }) {
+  const breakdown = getDayEventBreakdown(data, dayInt);
+  const totalMin = Math.round(breakdown.totalMs / 60000);
+  return (
+    <div className="day-breakdown">
+      <p className="chart-hint" style={{ textTransform: "none", marginBottom: 8 }}>
+        {breakdown.totalCount} events on {dayLabel}, totaling {totalMin.toLocaleString()} minutes.
+        {breakdown.duplicateGroups > 0
+          ? ` ${breakdown.duplicateGroups} exact-duplicate group${breakdown.duplicateGroups === 1 ? "" : "s"} found — same artist, track, and play length appearing more than once, most likely from an overlapping data upload.`
+          : " No exact duplicates found — worth checking for near-duplicates (same song, slightly different play length) or a source-data issue instead."}
+      </p>
+      <div className="day-breakdown-list">
+        {breakdown.events.map((e, i) => (
+          <div className={`day-breakdown-row${e.exactDuplicateCount > 1 ? " dup" : ""}`} key={i}>
+            <span className="day-breakdown-track">{e.track} — {e.artist}</span>
+            <span className="day-breakdown-meta">
+              {e.ms !== null ? `${Math.round(e.ms / 1000)}s` : ""}
+              {e.exactDuplicateCount > 1 ? ` · ${e.exactDuplicateCount}× identical` : ""}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -38,7 +86,7 @@ function earlierWins(dayIntA, dayIntB) {
   return dayIntA < dayIntB ? "A" : "B";
 }
 
-export default function ListeningRecords({ recordsA, recordsB, nameA, nameB }) {
+export default function ListeningRecords({ recordsA, recordsB, nameA, nameB, dataA, dataB }) {
   if (!recordsA || !recordsB) {
     return <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>Not enough data to compute records yet.</p>;
   }
@@ -147,11 +195,17 @@ export default function ListeningRecords({ recordsA, recordsB, nameA, nameB }) {
       {recordsA.bestDayMinutes !== null && recordsB.bestDayMinutes !== null && (
         <RecordRow
           label="Most minutes listened in a day"
-          valueA={`${recordsA.bestDayMinutes} min`}
+          valueA={`${recordsA.bestDayMinutes.toLocaleString()} min`}
           subA={recordsA.bestDayMinutesDayLabel}
-          valueB={`${recordsB.bestDayMinutes} min`}
+          valueB={`${recordsB.bestDayMinutes.toLocaleString()} min`}
           subB={recordsB.bestDayMinutesDayLabel}
           winner={higherWins(recordsA.bestDayMinutes, recordsB.bestDayMinutes)}
+          warningA={recordsA.bestDayMinutesImpossible && (
+            <ImpossibleDayWarning data={dataA} dayInt={recordsA.bestDayMinutesDayInt} dayLabel={recordsA.bestDayMinutesDayLabel} />
+          )}
+          warningB={recordsB.bestDayMinutesImpossible && (
+            <ImpossibleDayWarning data={dataB} dayInt={recordsB.bestDayMinutesDayInt} dayLabel={recordsB.bestDayMinutesDayLabel} />
+          )}
         />
       )}
 

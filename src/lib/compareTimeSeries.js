@@ -1,4 +1,4 @@
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+import { MONTH_SHORT } from "./constants.js";
 
 function yearOf(d) { return Math.floor(d / 10000); }
 function monthOf(d) { return Math.floor((d % 10000) / 100); }
@@ -15,6 +15,7 @@ export function compareTimeSeries(dataA, dataB, opts) {
   const { grain = "year", filterType = "artist", filterValue, genreTags = {}, fromInt, toInt } = opts;
 
   function matches(data, i) {
+    if (filterType === "none" || !filterValue) return true;
     const artistName = data.artistNames[data.eventArtistIdx[i]];
     if (filterType === "artist") return artistName === filterValue;
     if (filterType === "genre") return (genreTags[artistName] || null) === filterValue;

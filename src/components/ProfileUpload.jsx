@@ -9,6 +9,7 @@ export default function ProfileUpload({ userId, existingProfile, onDone, onCance
   const [status, setStatus] = useState(null);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [uploadMode, setUploadMode] = useState("merge"); // "merge" | "replace" — only relevant when refreshing an existing profile
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -29,10 +30,14 @@ export default function ProfileUpload({ userId, existingProfile, onDone, onCance
 
       let profileData;
       if (existingProfile) {
-        setStatus("Loading your existing data…");
-        const existingData = await getProfileData(existingProfile.storage_path);
-        profileData = mergeProfileData(existingData, lastfmText, spotifyTexts, (msg) => setStatus(msg));
-        setStatus("Uploading merged data…");
+        if (uploadMode === "replace") {
+          profileData = buildProfileData(lastfmText, spotifyTexts, (msg) => setStatus(msg));
+        } else {
+          setStatus("Loading your existing data…");
+          const existingData = await getProfileData(existingProfile.storage_path);
+          profileData = mergeProfileData(existingData, lastfmText, spotifyTexts, (msg) => setStatus(msg));
+        }
+        setStatus(uploadMode === "replace" ? "Uploading replacement data…" : "Uploading merged data…");
         await refreshProfileData(existingProfile, profileData);
       } else {
         profileData = buildProfileData(lastfmText, spotifyTexts, (msg) => setStatus(msg));
@@ -58,10 +63,30 @@ export default function ProfileUpload({ userId, existingProfile, onDone, onCance
       </div>
 
       {existingProfile && (
-        <p className="chart-hint" style={{ textTransform: "none", marginBottom: 12 }}>
-          Whatever you upload here gets merged into this profile's existing data — you only need
-          to include new files, not everything you've uploaded before.
-        </p>
+        <>
+          <div className="content-toggle" style={{ marginBottom: 10 }}>
+            <button className={uploadMode === "merge" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setUploadMode("merge")} type="button">
+              Merge with existing
+            </button>
+            <button className={uploadMode === "replace" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setUploadMode("replace")} type="button">
+              Replace entirely
+            </button>
+          </div>
+          {uploadMode === "merge" ? (
+            <p className="chart-hint" style={{ textTransform: "none", marginBottom: 12 }}>
+              Whatever you upload here gets merged into this profile's existing data — you only need
+              to include new files, not everything you've uploaded before.
+            </p>
+          ) : (
+            <p className="chart-hint" style={{ textTransform: "none", marginBottom: 12, color: "var(--ink-dim)" }}>
+              ⚠ This fully rebuilds the profile from only what you upload here — you must include
+              every file you've ever uploaded (all Last.fm exports and all Spotify JSON files), not
+              just new ones, or you'll lose history. Use this when data needs a clean re-ingest
+              (e.g. after a processing fix), not for routine updates — "Merge with existing" is
+              right for that.
+            </p>
+          )}
+        </>
       )}
 
       <form onSubmit={handleSubmit}>
@@ -104,7 +129,7 @@ export default function ProfileUpload({ userId, existingProfile, onDone, onCance
         {status && <p className="chart-hint" style={{ marginBottom: 10 }}>{status}</p>}
 
         <button className="btn primary" type="submit" disabled={busy} style={{ width: "100%", padding: "10px 12px" }}>
-          {busy ? "Processing…" : existingProfile ? "Upload refreshed data" : "Create profile"}
+          {busy ? "Processing…" : existingProfile ? (uploadMode === "replace" ? "Replace profile data" : "Upload merged data") : "Create profile"}
         </button>
       </form>
 

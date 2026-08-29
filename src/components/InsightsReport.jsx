@@ -58,7 +58,7 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
           <input
             type="password"
             className="insight-key-input"
-            placeholder="Anthropic API key..."
+            placeholder="Anthropic API key…"
             value={apiKeyInput}
             onChange={(e) => setApiKeyInput(e.target.value)}
             style={{ marginBottom: 10 }}
@@ -80,7 +80,7 @@ export default function InsightsReport({ comparison, genreCmp, overlap }) {
           rows={2}
         />
         <button className="btn primary" onClick={handleGenerate} disabled={loading} style={{ marginTop: 10 }}>
-          {loading ? "Writing report..." : sections ? "Regenerate report" : "Generate report"}
+          {loading ? "Writing report…" : sections ? "Regenerate report" : "Generate report"}
         </button>
         {error && <p className="insight-error" style={{ marginTop: 10 }}>{error}</p>}
       </section>

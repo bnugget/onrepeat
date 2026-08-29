@@ -1,7 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+import { MONTH_NAMES } from "../lib/constants.js";
 const DAY_LABELS = ["S","M","T","W","T","F","S"];
 const POPUP_WIDTH = 300;
 const POPUP_HEIGHT_ESTIMATE = 430;
@@ -232,10 +231,10 @@ export default function DateRangePicker({ bounds, fromInt, toInt, onChange }) {
           </div>
 
           <div className="date-picker-nav">
-            <button className="btn" onClick={() => changeMonth(-1)}>‹</button>
+            <button className="btn" aria-label="Previous month" onClick={() => changeMonth(-1)}>‹</button>
             <MiniSelect value={viewMonth} options={monthOptions} onChange={setViewMonth} />
             <MiniSelect value={viewYear} options={yearOptions} onChange={setViewYear} />
-            <button className="btn" onClick={() => changeMonth(1)}>›</button>
+            <button className="btn" aria-label="Next month" onClick={() => changeMonth(1)}>›</button>
           </div>
 
           <div className="date-picker-hint">

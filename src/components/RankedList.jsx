@@ -36,7 +36,7 @@ export default function RankedList({ items, onItemClick, selectedKey }) {
           >
             <span className="ranked-rank">{item.rank}</span>
             <div className="ranked-info">
-              <span className="ranked-primary">{item.primary}</span>
+              <span className="ranked-primary" title={item.primary}>{item.primary}</span>
               {item.secondary && <span className="ranked-secondary">{item.secondary}</span>}
               {item.meta && <span className="ranked-meta">{item.meta}</span>}
             </div>

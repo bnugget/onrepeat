@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar.jsx";
+import TwoLevelNav from "./components/TwoLevelNav.jsx";
 import InsightDrawer from "./components/InsightDrawer.jsx";
 import StackedBarChart from "./components/StackedBarChart.jsx";
 import LegendPanel from "./components/LegendPanel.jsx";
@@ -61,18 +62,38 @@ import {
 import { loadEras, saveEras } from "./lib/eras.js";
 import { dayIntToOrdinal } from "./lib/dateUtils.js";
 import { runGenreFetch } from "./lib/lastfm.js";
+import { MONTH_SHORT } from "./lib/constants.js";
 
 function ordinalToDayInt(ord) {
   const dt = new Date(ord * 86400000);
   return dt.getUTCFullYear() * 10000 + (dt.getUTCMonth() + 1) * 100 + dt.getUTCDate();
 }
 
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function formatRangeLabel(dayInt) {
   const y = Math.floor(dayInt / 10000);
   const m = Math.floor((dayInt % 10000) / 100);
   return `${MONTH_SHORT[m - 1]} ${y}`;
 }
+function formatPrevMonthLabel(dayInt) {
+  const y = Math.floor(dayInt / 10000);
+  const m = Math.floor((dayInt % 10000) / 100);
+  return m === 1 ? `${MONTH_SHORT[11]} ${y - 1}` : `${MONTH_SHORT[m - 2]} ${y}`;
+}
+
+const DASHBOARD_NAV_GROUPS = [
+  { key: "summary", label: "Summary", subTabs: [
+    { key: "dashboard", label: "Dashboard" },
+    { key: "top100", label: "Top 100" }
+  ]},
+  { key: "deepDive", label: "Deep Dive", subTabs: [
+    { key: "byGenre", label: "Artists by Genre" },
+    { key: "songDistribution", label: "Song Distribution" }
+  ]},
+  { key: "discover", label: "Discover", subTabs: [
+    { key: "obsessionIndex", label: "Obsession Index" }
+  ]}
+];
+
 function daysInMonth(y, m) {
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 }
@@ -97,6 +118,7 @@ export default function Dashboard({ rawData }) {
   const ARTIST_ORDER = useMemo(() => ["Other", ...[...rawData.top100].reverse()], [rawData]);
 
   const [page, setPage] = useState("dashboard");
+  const [top100Mode, setTop100Mode] = useState("artists");
   const [distArtist, setDistArtist] = useState(null);
   const [distSong, setDistSong] = useState(null);
   const [tab, setTab] = useState("artist");
@@ -795,20 +817,21 @@ export default function Dashboard({ rawData }) {
             <button className="btn" onClick={() => setSidebarOpen(true)}>☰ Filters</button>
           </div>
 
-          <nav className="page-nav">
-            <button className={page === "dashboard" ? "page-tab active" : "page-tab"} onClick={() => setPage("dashboard")}>Dashboard</button>
-            <button className={page === "byGenre" ? "page-tab active" : "page-tab"} onClick={() => setPage("byGenre")}>Artists by Genre</button>
-            <button className={page === "artists" ? "page-tab active" : "page-tab"} onClick={() => setPage("artists")}>Top 100 Artists</button>
-            <button className={page === "songs" ? "page-tab active" : "page-tab"} onClick={() => setPage("songs")}>Top 100 Songs</button>
-            <button className={page === "albums" ? "page-tab active" : "page-tab"} onClick={() => setPage("albums")}>Top 100 Albums</button>
-            <button className={page === "songDistribution" ? "page-tab active" : "page-tab"} onClick={() => setPage("songDistribution")}>Song Distribution</button>
-            <button className={page === "obsessionIndex" ? "page-tab active" : "page-tab"} onClick={() => setPage("obsessionIndex")}>Obsession Index</button>
-          </nav>
+          <TwoLevelNav groups={DASHBOARD_NAV_GROUPS} active={page} onChange={setPage} />
 
           {page === "byGenre" && <ArtistsByGenrePage data={filteredData} genreTags={genreTags} fromInt={fromInt} toInt={toInt} />}
-          {page === "artists" && <TopArtistsPage data={filteredData} fromInt={fromInt} toInt={toInt} onSelectArtist={openSongDistribution} />}
-          {page === "songs" && <TopSongsPage data={filteredData} fromInt={fromInt} toInt={toInt} onSelectSong={openSongDistribution} />}
-          {page === "albums" && <TopAlbumsPage data={filteredData} fromInt={fromInt} toInt={toInt} />}
+          {page === "top100" && (
+            <>
+              <div className="content-toggle" style={{ marginBottom: 16 }}>
+                <button className={top100Mode === "artists" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setTop100Mode("artists")}>Artists</button>
+                <button className={top100Mode === "songs" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setTop100Mode("songs")}>Songs</button>
+                <button className={top100Mode === "albums" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setTop100Mode("albums")}>Albums</button>
+              </div>
+              {top100Mode === "artists" && <TopArtistsPage data={filteredData} fromInt={fromInt} toInt={toInt} onSelectArtist={openSongDistribution} />}
+              {top100Mode === "songs" && <TopSongsPage data={filteredData} fromInt={fromInt} toInt={toInt} onSelectSong={openSongDistribution} />}
+              {top100Mode === "albums" && <TopAlbumsPage data={filteredData} fromInt={fromInt} toInt={toInt} />}
+            </>
+          )}
           {page === "songDistribution" && (
             <SongDistributionPage
               data={rawData}
@@ -943,8 +966,10 @@ export default function Dashboard({ rawData }) {
           )}
 
           <footer>
-            Source: Last.fm plays through Aug 2014, Spotify Extended Streaming History from
-            Sept 2014 on (Spotify's export had almost no data before then) ·{" "}
+            Source: {rawData.lastfmSpliceDate
+              ? <>Last.fm plays through {formatPrevMonthLabel(rawData.lastfmSpliceDate)}, Spotify Extended
+                  Streaming History from {formatRangeLabel(rawData.lastfmSpliceDate)} on</>
+              : "Spotify Extended Streaming History"} ·{" "}
             {rawData.eventDate.length.toLocaleString()} events kept (phantom 0ms Spotify entries
             discarded) · plays under {(rawData.countPlayThresholdMs || 30000) / 1000}s counted as
             skips, not real listens · Last.fm-era minutes-listened figures are estimated

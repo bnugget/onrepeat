@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { buildComparison } from "../lib/compareContext.js";
 import { compareArtist } from "../lib/compareArtistLeaderboard.js";
 import { compareTimeSeries } from "../lib/compareTimeSeries.js";
+import { findSharedFandomHotspots } from "../lib/sharedFandomHotspots.js";
 import { compareGenreDistribution } from "../lib/compareGenreDistribution.js";
 import { artistOverlapAnalysis } from "../lib/artistOverlapAnalysis.js";
 import { multiplierBadge } from "../lib/compareFormat.js";
@@ -12,14 +13,18 @@ import { renderMarkdownLite } from "../lib/markdownLite.jsx";
 import { fetchAllGenreTags } from "../lib/genreTagsApi.js";
 import { dateBounds } from "../lib/aggregate.js";
 import ComparisonTable from "./ComparisonTable.jsx";
+import RankedList from "./RankedList.jsx";
 import CompareTimeSeriesChart from "./CompareTimeSeriesChart.jsx";
+import TrendOverlayChart from "./TrendOverlayChart.jsx";
 import GenrePieCompare from "./GenrePieCompare.jsx";
 import ArtistOverlapScatter from "./ArtistOverlapScatter.jsx";
 import CompareSidebar from "./CompareSidebar.jsx";
 import ListeningRecords from "./ListeningRecords.jsx";
 import { compareGenreLeaderboard } from "../lib/compareGenreLeaderboard.js";
 import { buildPerfectPlaylist } from "../lib/perfectPlaylist.js";
+import { buildHiddenGems } from "../lib/hiddenGems.js";
 import GenreSearchPicker from "./GenreSearchPicker.jsx";
+import TwoLevelNav from "./TwoLevelNav.jsx";
 import InsightsReport from "./InsightsReport.jsx";
 
 const SUBTAB_META = {
@@ -40,18 +45,18 @@ const SUBTAB_META = {
   },
   leaderboard: {
     eyebrow: "Compare Profiles",
-    title: <>Artist <span>Leaderboard</span></>,
-    subhead: "Pick one artist you both listen to and see it head to head — who's the bigger fan relative to their own total listening, not just raw play count, plus each person's own top tracks by that artist."
-  },
-  genreLeaderboard: {
-    eyebrow: "Compare Profiles",
-    title: <>Genre <span>Leaderboard</span></>,
-    subhead: "Pick a genre and see your top artists in it side by side with theirs — the same idea as Artist Leaderboard, one level up."
+    title: <>Leaderboard</>,
+    subhead: "Head to head by artist or by genre — toggle below. Who's the bigger fan relative to their own total listening, not just raw play count."
   },
   playlist: {
     eyebrow: "Compare Profiles",
     title: <>Perfect <span>Playlist</span></>,
     subhead: "Songs that are genuine favorites for both of you — not just artists you share, but the specific tracks that rank near the top of each person's own listening for that artist."
+  },
+  hiddenGems: {
+    eyebrow: "Compare Profiles",
+    title: <>Hidden <span>Gems</span></>,
+    subhead: "The inverse of Perfect Playlist — for artists you're both genuinely into, songs that are a real favorite for one of you but that the other has never played at all. Grounded recommendations, not cold guesses."
   },
   timeseries: {
     eyebrow: "Compare Profiles",
@@ -59,6 +64,22 @@ const SUBTAB_META = {
     subhead: "Pick an artist or a shared genre and see both people's plays over time, side by side — useful for spotting whether you were both going through the same phase at the same time, or years apart."
   }
 };
+
+const COMPARE_NAV_GROUPS = [
+  { key: "summary", label: "Summary", subTabs: [
+    { key: "overview", label: "Overview" },
+    { key: "records", label: "Listening Records" },
+    { key: "report", label: "Insights Report" }
+  ]},
+  { key: "deepDive", label: "Deep Dive", subTabs: [
+    { key: "leaderboard", label: "Leaderboard" },
+    { key: "timeseries", label: "Play Trends" }
+  ]},
+  { key: "discover", label: "Discover", subTabs: [
+    { key: "playlist", label: "Perfect Playlist" },
+    { key: "hiddenGems", label: "Hidden Gems" }
+  ]}
+];
 
 export default function GroupView({ profiles, getProfileData }) {
   const [idA, setIdA] = useState("");
@@ -84,6 +105,11 @@ export default function GroupView({ profiles, getProfileData }) {
   const [artistQuery, setArtistQuery] = useState("");
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [genreLBSelection, setGenreLBSelection] = useState(null);
+  const [leaderboardMode, setLeaderboardMode] = useState("artist");
+  const [trendGrain, setTrendGrain] = useState("year");
+  const [trendFilterType, setTrendFilterType] = useState("none");
+  const [trendFilterValue, setTrendFilterValue] = useState(null);
+  const [showHotspots, setShowHotspots] = useState(true);
 
   const [tsGrain, setTsGrain] = useState("year");
   const [tsFilterType, setTsFilterType] = useState("artist");
@@ -161,10 +187,66 @@ export default function GroupView({ profiles, getProfileData }) {
   const recordsA = useMemo(() => (bothLoaded ? computeListeningRecords(dataA, fromInt, toInt, genreTags) : null), [bothLoaded, dataA, fromInt, toInt, genreTags]);
   const recordsB = useMemo(() => (bothLoaded ? computeListeningRecords(dataB, fromInt, toInt, genreTags) : null), [bothLoaded, dataB, fromInt, toInt, genreTags]);
 
+  const trendRows = useMemo(() => {
+    if (!bothLoaded) return [];
+    return compareTimeSeries(dataA, dataB, {
+      grain: trendGrain,
+      filterType: trendFilterType,
+      filterValue: trendFilterValue,
+      genreTags,
+      fromInt,
+      toInt
+    });
+  }, [bothLoaded, dataA, dataB, trendGrain, trendFilterType, trendFilterValue, genreTags, fromInt, toInt]);
+
+  // Hotspots only make sense against total plays — filtering to one
+  // artist/genre and THEN highlighting a different artist's overlap
+  // would be a confusing mismatch, so this only computes in "All" mode.
+  const trendHotspots = useMemo(() => {
+    if (!bothLoaded || trendFilterType !== "none") return [];
+    const raw = findSharedFandomHotspots(dataA, dataB, { grain: trendGrain, fromInt, toInt, maxHotspots: 5 });
+    const rowByPeriod = new Map(trendRows.map((r, i) => [r.key, { ...r, colIndex: i }]));
+
+    const withPosition = raw
+      .map((h) => {
+        const row = rowByPeriod.get(h.period);
+        if (!row) return null;
+        return { ...h, label: row.label, colIndex: row.colIndex, periodStart: row.periodStart, periodEnd: row.periodEnd };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.colIndex - b.colIndex);
+
+    // Pills placed close together in time collide horizontally at
+    // this chart's width — stagger onto a new vertical tier whenever
+    // a pill would land within MIN_GAP columns of the last one
+    // already placed in its tier, instead of letting them overlap.
+    const MIN_GAP = Math.max(2, Math.ceil(trendRows.length / 8));
+    const lastColByTier = [];
+    return withPosition.map((h) => {
+      let tier = 0;
+      while (lastColByTier[tier] !== undefined && h.colIndex - lastColByTier[tier] < MIN_GAP) tier++;
+      lastColByTier[tier] = h.colIndex;
+      return { ...h, tier };
+    });
+  }, [bothLoaded, trendFilterType, dataA, dataB, trendGrain, fromInt, toInt, trendRows]);
+
+  function handleHotspotClick(h) {
+    setSelectedArtist(h.artist);
+    setLeaderboardMode("artist");
+    setFromInt(h.periodStart);
+    setToInt(h.periodEnd);
+    setSubTab("leaderboard");
+  }
+
   const perfectPlaylist = useMemo(() => {
     if (!bothLoaded) return [];
     return buildPerfectPlaylist(dataA, dataB, fromInt, toInt, minPlays);
   }, [bothLoaded, dataA, dataB, fromInt, toInt, minPlays]);
+
+  const hiddenGems = useMemo(() => {
+    if (!bothLoaded) return null;
+    return buildHiddenGems(dataA, comparison?.nameA || profileA?.name, dataB, comparison?.nameB || profileB?.name, fromInt, toInt, minPlays);
+  }, [bothLoaded, dataA, dataB, fromInt, toInt, minPlays, comparison, profileA, profileB]);
 
   const genreLeaderboard = useMemo(() => {
     if (!bothLoaded || !genreLBSelection) return null;
@@ -248,6 +330,13 @@ export default function GroupView({ profiles, getProfileData }) {
         onDateChange={(f, t) => { setFromInt(f); setToInt(t); }}
         minPlays={minPlays}
         onMinPlaysChange={setMinPlays}
+        trendFilterType={trendFilterType}
+        onTrendFilterTypeChange={setTrendFilterType}
+        trendFilterValue={trendFilterValue}
+        onTrendFilterValueChange={setTrendFilterValue}
+        dataA={dataA}
+        dataB={dataB}
+        genreTags={genreTags}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
@@ -257,6 +346,10 @@ export default function GroupView({ profiles, getProfileData }) {
           <div className="mobile-topbar">
             <button className="btn" onClick={() => setSidebarOpen(true)}>☰ Compare setup</button>
           </div>
+
+          {bothLoaded && (
+            <TwoLevelNav groups={COMPARE_NAV_GROUPS} active={subTab} onChange={setSubTab} />
+          )}
 
           <header className="top">
             <p className="eyebrow">{bothLoaded ? SUBTAB_META[subTab].eyebrow : "Compare Profiles"}</p>
@@ -296,25 +389,54 @@ export default function GroupView({ profiles, getProfileData }) {
 
           {bothLoaded && (
             <>
-              <nav className="page-nav">
-                <button className={subTab === "overview" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("overview")}>Overview</button>
-                <button className={subTab === "records" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("records")}>Listening Records</button>
-                <button className={subTab === "report" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("report")}>Insights Report</button>
-                <button className={subTab === "leaderboard" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("leaderboard")}>Artist Leaderboard</button>
-                <button className={subTab === "genreLeaderboard" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("genreLeaderboard")}>Genre Leaderboard</button>
-                <button className={subTab === "playlist" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("playlist")}>Perfect Playlist</button>
-                <button className={subTab === "timeseries" ? "page-tab active" : "page-tab"} onClick={() => setSubTab("timeseries")}>Play Trends</button>
-              </nav>
-
               {subTab === "overview" && comparison && (
                 <>
+                  <section className="chart-card" style={{ marginTop: 16 }}>
+                    <div className="chart-head">
+                      <span className="ranked-primary" style={{ fontSize: 16 }}>Listening trends over time</span>
+                      <div style={{ display: "flex", gap: 16, alignItems: "flex-end" }}>
+                        <div className="control-group">
+                          <span className="control-label">Hotspots</span>
+                          <div className="content-toggle">
+                            <button className={showHotspots ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setShowHotspots(true)}>On</button>
+                            <button className={!showHotspots ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setShowHotspots(false)}>Off</button>
+                          </div>
+                        </div>
+                        <div className="control-group">
+                          <span className="control-label">Grain</span>
+                          <div className="tabs">
+                            <button className={trendGrain === "year" ? "tab active" : "tab"} onClick={() => setTrendGrain("year")}>Year</button>
+                            <button className={trendGrain === "month" ? "tab active" : "tab"} onClick={() => setTrendGrain("month")}>Month</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 12 }}>
+                      Both people's plays overlaid, no grouping — just whether your listening moved
+                      together over time or not. Filter by artist or genre in the sidebar; defaults
+                      to total plays.{trendFilterType === "none"
+                        ? " Shaded bands mark up to 5 periods where you were both genuinely into the same artist — scored by whichever of you listened less, so one person going hard alone doesn't count. Click a pill to see that artist head-to-head, scoped to that exact period."
+                        : " Hotspot bands only apply in \"All\" mode — clear the sidebar filter to see them."}
+                    </p>
+                    <TrendOverlayChart
+                      rows={trendRows}
+                      nameA={comparison.nameA}
+                      nameB={comparison.nameB}
+                      hotspots={showHotspots && trendFilterType === "none" ? trendHotspots : null}
+                      onHotspotClick={handleHotspotClick}
+                    />
+                  </section>
+
                   <section className="chart-card" style={{ marginTop: 16 }}>
                 <div className="chart-head">
                   <span className="ranked-primary" style={{ fontSize: 16 }}>{comparison.nameA} vs {comparison.nameB}</span>
                 </div>
                 <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 12 }}>
                   How much of each person's listening went to the same artists, proportionally —
-                  not just whether you've both heard of the same people.
+                  not just whether you've both heard of the same people. Most of what's below —
+                  Bigger Fan, Most Different, and the leaderboards — ranks by standing within each
+                  person's own rotation rather than raw %, so a wider-ranging listener doesn't look
+                  like a smaller fan of everything by default.
                 </p>
 
                 <div className="similarity-standalone">
@@ -344,7 +466,7 @@ export default function GroupView({ profiles, getProfileData }) {
                           cellA: { value: c.countA.toLocaleString(), sub: `${c.pctA.toFixed(1)}%` },
                           cellB: { value: c.countB.toLocaleString(), sub: `${c.pctB.toFixed(1)}%` }
                         }))}
-                        onItemClick={(item) => { setSelectedArtist(item.name); setSubTab("leaderboard"); }}
+                        onItemClick={(item) => { setSelectedArtist(item.name); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
                       />
                       {overlap.topContributors.length > 5 && (
                         <button className="btn" style={{ marginTop: 10, width: "100%" }} onClick={() => setShowAllContributors((s) => !s)}>
@@ -362,7 +484,7 @@ export default function GroupView({ profiles, getProfileData }) {
                     <input
                       type="password"
                       className="insight-key-input"
-                      placeholder="Anthropic API key..."
+                      placeholder="Anthropic API key…"
                       value={apiKeyInput}
                       onChange={(e) => setApiKeyInput(e.target.value)}
                     />
@@ -383,7 +505,7 @@ export default function GroupView({ profiles, getProfileData }) {
                     rows={2}
                   />
                   <button className="btn primary" onClick={handleGenerateInsight} disabled={insightLoading}>
-                    {insightLoading ? "Thinking..." : insight ? "Regenerate" : "Generate comparison insight"}
+                    {insightLoading ? "Thinking…" : insight ? "Regenerate" : "Generate comparison insight"}
                   </button>
                 </div>
                 {insight && <div className="insight-body" style={{ marginTop: 12 }}>{renderMarkdownLite(insight)}</div>}
@@ -414,8 +536,7 @@ export default function GroupView({ profiles, getProfileData }) {
                     <span className="ranked-primary" style={{ fontSize: 16 }}>Bigger Fan</span>
                   </div>
                   <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 10 }}>
-                    For artists you both actually listen to — ranked by relative priority within
-                    each person's own rotation (see the note above).
+                    For artists you both actually listen to — same ranking approach noted above.
                   </p>
                   <ComparisonTable
                     nameA={comparison.nameA}
@@ -427,7 +548,7 @@ export default function GroupView({ profiles, getProfileData }) {
                       cellB: { value: `#${p.rankB}`, sub: `of ${p.catalogSizeB} · ${p.pctB.toFixed(1)}%` },
                       winner: p.biggerFan
                     }))}
-                    onItemClick={(item) => { setSelectedArtist(item.name); setSubTab("leaderboard"); }}
+                    onItemClick={(item) => { setSelectedArtist(item.name); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
                   />
                 </section>
               )}
@@ -438,8 +559,8 @@ export default function GroupView({ profiles, getProfileData }) {
                     <span className="ranked-primary" style={{ fontSize: 16 }}>Most Different</span>
                   </div>
                   <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 10 }}>
-                    Same rank-based approach as Bigger Fan, but across ALL artists — including ones
-                    only one of you has ever played, which is often the most polarizing case there is.
+                    Same approach as Bigger Fan, extended to ALL artists — including ones only one
+                    of you has ever played, often the most polarizing case there is.
                   </p>
                   <ComparisonTable
                     nameA={comparison.nameA}
@@ -452,7 +573,7 @@ export default function GroupView({ profiles, getProfileData }) {
                       cellA: d.rankA ? { value: `#${d.rankA}`, sub: `of ${d.catalogSizeA} · ${d.pctA.toFixed(1)}%` } : { value: "—", sub: "never played" },
                       cellB: d.rankB ? { value: `#${d.rankB}`, sub: `of ${d.catalogSizeB} · ${d.pctB.toFixed(1)}%` } : { value: "—", sub: "never played" }
                     }))}
-                    onItemClick={(item) => { setSelectedArtist(item.name); setSubTab("leaderboard"); }}
+                    onItemClick={(item) => { setSelectedArtist(item.name); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
                   />
                 </section>
               )}
@@ -461,109 +582,115 @@ export default function GroupView({ profiles, getProfileData }) {
 
           {subTab === "leaderboard" && (
             <section className="chart-card" style={{ marginTop: 16 }}>
-              <div className="field" style={{ marginBottom: 10 }}>
-                <label>Artist</label>
-                <input
-                  type="text"
-                  placeholder="Search an artist either of you has played..."
-                  value={artistQuery}
-                  onChange={(e) => setArtistQuery(e.target.value)}
-                />
+              <div className="content-toggle" style={{ marginBottom: 14 }}>
+                <button className={leaderboardMode === "artist" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setLeaderboardMode("artist")}>Artist</button>
+                <button className={leaderboardMode === "genre" ? "content-toggle-btn active" : "content-toggle-btn"} onClick={() => setLeaderboardMode("genre")}>Genre</button>
               </div>
-              {artistQuery.trim() && (
-                <div className="dist-search-results">
-                  {artistMatches.length === 0 && <p className="mood-empty">No matches.</p>}
-                  {artistMatches.map((name) => (
-                    <button key={name} className="dist-search-result" onClick={() => { setSelectedArtist(name); setArtistQuery(""); }}>
-                      <span>{name}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
 
-              {!selectedArtist ? (
-                <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>Search an artist above to compare.</p>
-              ) : artistComparison && (
+              {leaderboardMode === "artist" ? (
                 <>
-                  <div className="chart-head" style={{ marginTop: 8 }}>
-                    <span className="ranked-primary" style={{ fontSize: 16 }}>{artistComparison.artistName}</span>
+                  <div className="field" style={{ marginBottom: 10 }}>
+                    <label>Artist</label>
+                    <input
+                      type="text"
+                      placeholder="Search an artist either of you has played…"
+                      value={artistQuery}
+                      onChange={(e) => setArtistQuery(e.target.value)}
+                    />
                   </div>
-                  <div className="leaderboard-kpi-row">
-                    <div className={`leaderboard-kpi${artistComparison.biggerFan === "A" ? " winner" : ""}`}>
-                      {artistComparison.biggerFan === "A" && <span className="record-trophy">🏆</span>}
-                      <span className="leaderboard-kpi-value">{artistComparison.a.plays.toLocaleString()}</span>
-                      <span className="leaderboard-kpi-caption">{artistComparison.nameA} plays</span>
-                      <span className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
-                        #{artistComparison.a.rank} of {artistComparison.a.catalogSize} artists · {artistComparison.a.pctOfTotal.toFixed(1)}% of their listening
-                      </span>
+                  {artistQuery.trim() && (
+                    <div className="dist-search-results">
+                      {artistMatches.length === 0 && <p className="mood-empty">No matches.</p>}
+                      {artistMatches.map((name) => (
+                        <button key={name} className="dist-search-result" onClick={() => { setSelectedArtist(name); setArtistQuery(""); }}>
+                          <span>{name}</span>
+                        </button>
+                      ))}
                     </div>
-                    <div className={`leaderboard-kpi${artistComparison.biggerFan === "B" ? " winner" : ""}`}>
-                      {artistComparison.biggerFan === "B" && <span className="record-trophy">🏆</span>}
-                      <span className="leaderboard-kpi-value">{artistComparison.b.plays.toLocaleString()}</span>
-                      <span className="leaderboard-kpi-caption">{artistComparison.nameB} plays</span>
-                      <span className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
-                        #{artistComparison.b.rank} of {artistComparison.b.catalogSize} artists · {artistComparison.b.pctOfTotal.toFixed(1)}% of their listening
-                      </span>
-                    </div>
-                  </div>
-                  <p className="chart-hint" style={{ textTransform: "none", fontSize: 12, marginBottom: 16 }}>
-                    Bigger fan is based on rank within each person's own catalog, not raw % — see
-                    Overview for why.
-                  </p>
-                  <div className="breakdown-col-label">Top tracks, side by side</div>
-                  <ComparisonTable
-                    nameA={artistComparison.nameA}
-                    nameB={artistComparison.nameB}
-                    hideWinner
-                    items={artistComparison.trackComparison.map((t) => {
-                      const { badgeA, badgeB } = multiplierBadge(t.countA, t.countB);
-                      return {
-                        key: t.track,
-                        name: t.track,
-                        cellA: { value: t.countA.toLocaleString(), badge: badgeA },
-                        cellB: { value: t.countB.toLocaleString(), badge: badgeB }
-                      };
-                    })}
-                  />
+                  )}
+
+                  {!selectedArtist ? (
+                    <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>Search an artist above to compare.</p>
+                  ) : artistComparison && (
+                    <>
+                      <div className="chart-head" style={{ marginTop: 8 }}>
+                        <span className="ranked-primary" style={{ fontSize: 16 }}>{artistComparison.artistName}</span>
+                      </div>
+                      <div className="leaderboard-kpi-row">
+                        <div className={`leaderboard-kpi${artistComparison.biggerFan === "A" ? " winner" : ""}`}>
+                          {artistComparison.biggerFan === "A" && <span className="record-trophy">🏆</span>}
+                          <span className="leaderboard-kpi-value">{artistComparison.a.plays.toLocaleString()}</span>
+                          <span className="leaderboard-kpi-caption">{artistComparison.nameA} plays</span>
+                          <span className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
+                            #{artistComparison.a.rank} of {artistComparison.a.catalogSize} artists · {artistComparison.a.pctOfTotal.toFixed(1)}% of their listening
+                          </span>
+                        </div>
+                        <div className={`leaderboard-kpi${artistComparison.biggerFan === "B" ? " winner" : ""}`}>
+                          {artistComparison.biggerFan === "B" && <span className="record-trophy">🏆</span>}
+                          <span className="leaderboard-kpi-value">{artistComparison.b.plays.toLocaleString()}</span>
+                          <span className="leaderboard-kpi-caption">{artistComparison.nameB} plays</span>
+                          <span className="chart-hint" style={{ marginTop: 6, textTransform: "none" }}>
+                            #{artistComparison.b.rank} of {artistComparison.b.catalogSize} artists · {artistComparison.b.pctOfTotal.toFixed(1)}% of their listening
+                          </span>
+                        </div>
+                      </div>
+                      <p className="chart-hint" style={{ textTransform: "none", fontSize: 12, marginBottom: 16 }}>
+                        "Bigger fan" uses the same ranking approach as Overview, not raw play count.
+                      </p>
+                      <div className="breakdown-col-label">Top tracks, side by side</div>
+                      <ComparisonTable
+                        nameA={artistComparison.nameA}
+                        nameB={artistComparison.nameB}
+                        hideWinner
+                        items={artistComparison.trackComparison.map((t) => {
+                          const { badgeA, badgeB } = multiplierBadge(t.countA, t.countB);
+                          return {
+                            key: t.track,
+                            name: t.track,
+                            cellA: { value: t.countA.toLocaleString(), badge: badgeA },
+                            cellB: { value: t.countB.toLocaleString(), badge: badgeB }
+                          };
+                        })}
+                      />
+                    </>
+                  )}
                 </>
-              )}
-            </section>
-          )}
-
-          {subTab === "genreLeaderboard" && (
-            <section className="chart-card" style={{ marginTop: 16 }}>
-              <GenreSearchPicker
-                dataA={dataA}
-                dataB={dataB}
-                genreTags={genreTags}
-                value={genreLBSelection}
-                onChange={setGenreLBSelection}
-                placeholder="Search a genre, e.g. Hip Hop…"
-              />
-
-              {!genreLBSelection ? (
-                <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>Pick a genre above to compare.</p>
-              ) : genreLeaderboard && (
+              ) : (
                 <>
-                  <div className="chart-head" style={{ marginTop: 12 }}>
-                    <span className="ranked-primary" style={{ fontSize: 16 }}>{genreLeaderboard.genreName}</span>
-                    <span className="chart-hint">{genreLeaderboard.totalArtists} artist{genreLeaderboard.totalArtists === 1 ? "" : "s"} between you</span>
-                  </div>
-                  <ComparisonTable
-                    nameA={genreLeaderboard.nameA}
-                    nameB={genreLeaderboard.nameB}
-                    items={genreLeaderboard.rows.map((r) => {
-                      const { badgeA, badgeB } = multiplierBadge(r.countA, r.countB);
-                      return {
-                        key: r.name,
-                        name: r.name,
-                        cellA: { value: r.countA.toLocaleString(), badge: badgeA },
-                        cellB: { value: r.countB.toLocaleString(), badge: badgeB },
-                        winner: r.countA === r.countB ? "tie" : r.countA > r.countB ? "A" : "B"
-                      };
-                    })}
-                    onItemClick={(item) => { setSelectedArtist(item.name); setSubTab("leaderboard"); }}
+                  <GenreSearchPicker
+                    dataA={dataA}
+                    dataB={dataB}
+                    genreTags={genreTags}
+                    value={genreLBSelection}
+                    onChange={setGenreLBSelection}
+                    placeholder="Search a genre, e.g. Hip Hop…"
                   />
+
+                  {!genreLBSelection ? (
+                    <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>Pick a genre above to compare.</p>
+                  ) : genreLeaderboard && (
+                    <>
+                      <div className="chart-head" style={{ marginTop: 12 }}>
+                        <span className="ranked-primary" style={{ fontSize: 16 }}>{genreLeaderboard.genreName}</span>
+                        <span className="chart-hint">{genreLeaderboard.totalArtists} artist{genreLeaderboard.totalArtists === 1 ? "" : "s"} between you</span>
+                      </div>
+                      <ComparisonTable
+                        nameA={genreLeaderboard.nameA}
+                        nameB={genreLeaderboard.nameB}
+                        items={genreLeaderboard.rows.map((r) => {
+                          const { badgeA, badgeB } = multiplierBadge(r.countA, r.countB);
+                          return {
+                            key: r.name,
+                            name: r.name,
+                            cellA: { value: r.countA.toLocaleString(), badge: badgeA },
+                            cellB: { value: r.countB.toLocaleString(), badge: badgeB },
+                            winner: r.countA === r.countB ? "tie" : r.countA > r.countB ? "A" : "B"
+                          };
+                        })}
+                        onItemClick={(item) => { setSelectedArtist(item.name); setLeaderboardMode("artist"); }}
+                      />
+                    </>
+                  )}
                 </>
               )}
             </section>
@@ -572,9 +699,7 @@ export default function GroupView({ profiles, getProfileData }) {
           {subTab === "playlist" && (
             <section className="chart-card" style={{ marginTop: 16 }}>
               <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 12 }}>
-                A song lands here only if it's genuinely a favorite for both of you — ranking in
-                the top 30% of each person's own plays for that artist, not just something you've
-                both technically heard. Capped at 50 songs.
+                Top 30% of each person's own plays for that artist, both sides. Capped at 50 songs.
               </p>
               {perfectPlaylist.length === 0 ? (
                 <p className="mood-empty" style={{ padding: "30px 0", textAlign: "center" }}>
@@ -592,9 +717,57 @@ export default function GroupView({ profiles, getProfileData }) {
                     cellA: { value: p.countA.toLocaleString(), sub: `${p.pctA}th %ile` },
                     cellB: { value: p.countB.toLocaleString(), sub: `${p.pctB}th %ile` }
                   }))}
-                  onItemClick={(item) => { setSelectedArtist(item.nameSub); setSubTab("leaderboard"); }}
+                  onItemClick={(item) => { setSelectedArtist(item.nameSub); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
                 />
               )}
+            </section>
+          )}
+
+          {subTab === "hiddenGems" && hiddenGems && (
+            <section className="chart-card" style={{ marginTop: 16 }}>
+              <p className="chart-hint" style={{ textTransform: "none", fontSize: 12.5, marginBottom: 12 }}>
+                Same top-30% favorite bar as Perfect Playlist. Artist rank shown is how big a fan
+                the source person is of that artist overall — a pick from their #1 favorite artist
+                carries more weight than one from an artist they only sort of like.
+              </p>
+              <div className="gems-grid">
+                <section>
+                  <div className="breakdown-col-label">For {hiddenGems.nameA}</div>
+                  {hiddenGems.forA.length === 0 ? (
+                    <p className="mood-empty" style={{ padding: "20px 0", textAlign: "center" }}>Nothing qualifies yet.</p>
+                  ) : (
+                    <RankedList
+                      items={hiddenGems.forA.map((g, i) => ({
+                        rank: i + 1,
+                        key: `${g.artist}|${g.track}`,
+                        primary: g.track,
+                        secondary: g.artist,
+                        count: g.sourceCount,
+                        meta: `${hiddenGems.nameB}: ${g.sourcePercentile}th %ile of this artist · their #${g.artistRank} of ${g.artistCatalogSize} artists overall`
+                      }))}
+                      onItemClick={(item) => { setSelectedArtist(item.secondary); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
+                    />
+                  )}
+                </section>
+                <section>
+                  <div className="breakdown-col-label">For {hiddenGems.nameB}</div>
+                  {hiddenGems.forB.length === 0 ? (
+                    <p className="mood-empty" style={{ padding: "20px 0", textAlign: "center" }}>Nothing qualifies yet.</p>
+                  ) : (
+                    <RankedList
+                      items={hiddenGems.forB.map((g, i) => ({
+                        rank: i + 1,
+                        key: `${g.artist}|${g.track}`,
+                        primary: g.track,
+                        secondary: g.artist,
+                        count: g.sourceCount,
+                        meta: `${hiddenGems.nameA}: ${g.sourcePercentile}th %ile of this artist · their #${g.artistRank} of ${g.artistCatalogSize} artists overall`
+                      }))}
+                      onItemClick={(item) => { setSelectedArtist(item.secondary); setLeaderboardMode("artist"); setSubTab("leaderboard"); }}
+                    />
+                  )}
+                </section>
+              </div>
             </section>
           )}
 
@@ -618,7 +791,7 @@ export default function GroupView({ profiles, getProfileData }) {
                   <label>Artist</label>
                   <input
                     type="text"
-                    placeholder="Search an artist either of you has played..."
+                    placeholder="Search an artist either of you has played…"
                     value={tsQuery}
                     onChange={(e) => setTsQuery(e.target.value)}
                   />
@@ -669,7 +842,7 @@ export default function GroupView({ profiles, getProfileData }) {
 
           {subTab === "records" && (
             <div style={{ marginTop: 16 }}>
-              <ListeningRecords recordsA={recordsA} recordsB={recordsB} nameA={profileA.name} nameB={profileB.name} />
+              <ListeningRecords recordsA={recordsA} recordsB={recordsB} nameA={profileA.name} nameB={profileB.name} dataA={dataA} dataB={dataB} />
             </div>
           )}
 

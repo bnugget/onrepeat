@@ -90,6 +90,7 @@ export default function GenreTagger({
               className="btn primary"
               disabled={!lastfmKeyInput.trim() || remaining === 0}
               onClick={saveKeyAndStart}
+              title={!lastfmKeyInput.trim() ? "Paste your Last.fm API key above first" : undefined}
             >
               {remaining === 0 ? "All artists tagged" : `Fetch all ${remaining.toLocaleString()} (~${etaMin}m)`}
             </button>
@@ -162,7 +163,7 @@ export default function GenreTagger({
                 <span className="mood-current" style={{ borderColor: colorForGenre(current) }}>
                   <span className="sw" style={{ background: colorForGenre(current) }} />
                   {current}
-                  <button className="mood-x" onClick={() => onRemoveTag(m.name)}>×</button>
+                  <button className="mood-x" aria-label={`Remove genre tag for ${m.name}`} onClick={() => onRemoveTag(m.name)}>×</button>
                 </span>
               )}
             </div>

@@ -1,6 +1,6 @@
 import { dayIntToOrdinal, ordinalToDate } from "./dateUtils.js";
 
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+import { MONTH_SHORT } from "./constants.js";
 
 export function formatPeakRange(startOrd, endOrd) {
   const s = ordinalToDate(startOrd);

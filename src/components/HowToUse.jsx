@@ -32,16 +32,16 @@ function ProfileSwitcherPreview() {
           <span>Your profile</span>
           <span className="chart-hint">142,301</span>
         </button>
-        <button className="era-zoom" title="Upload fresher data" style={{ pointerEvents: "none" }}>↻</button>
-        <button className="mood-x" title="Delete" style={{ pointerEvents: "none" }}>×</button>
+        <button className="era-zoom" title="Upload fresher data" style={{ pointerEvents: "none" }} aria-hidden="true" tabIndex={-1}>↻</button>
+        <button className="mood-x" title="Delete" style={{ pointerEvents: "none" }} aria-hidden="true" tabIndex={-1}>×</button>
       </div>
       <div className="profile-switcher-row">
         <button className="profile-switcher-name" style={{ pointerEvents: "none" }}>
           <span>A friend's profile</span>
           <span className="chart-hint">88,940</span>
         </button>
-        <button className="era-zoom" title="Upload fresher data" style={{ pointerEvents: "none" }}>↻</button>
-        <button className="mood-x" title="Delete" style={{ pointerEvents: "none" }}>×</button>
+        <button className="era-zoom" title="Upload fresher data" style={{ pointerEvents: "none" }} aria-hidden="true" tabIndex={-1}>↻</button>
+        <button className="mood-x" title="Delete" style={{ pointerEvents: "none" }} aria-hidden="true" tabIndex={-1}>×</button>
       </div>
     </div>
   );
@@ -53,7 +53,7 @@ function TagChipPreview({ label, color, extra }) {
       <span className="sw" style={{ background: color }} />
       {label}
       {extra && <span style={{ marginLeft: 4 }}>{extra}</span>}
-      <button className="mood-x" style={{ pointerEvents: "none" }}>×</button>
+      <button className="mood-x" style={{ pointerEvents: "none" }} aria-hidden="true" tabIndex={-1}>×</button>
     </span>
   );
 }
